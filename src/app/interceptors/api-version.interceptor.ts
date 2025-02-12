@@ -17,6 +17,7 @@ export class ApiVersionInterceptor implements HttpInterceptor {
     next: HttpHandler
   ): Observable<HttpEvent<unknown>> {
     request = request.clone({
+      withCredentials: true,
       setHeaders: {
         Accept: `application/json; version=${environment.apiVersion}`,
       },

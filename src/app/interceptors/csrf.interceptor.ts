@@ -1,6 +1,7 @@
 import {
   HttpEvent,
   HttpHandler,
+  HttpHeaders,
   HttpInterceptor,
   HttpRequest,
 } from '@angular/common/http'
@@ -27,9 +28,14 @@ export class CsrfInterceptor implements HttpInterceptor {
     let csrfToken = this.cookieService.get(`${prefix}csrftoken`)
     if (csrfToken) {
       request = request.clone({
+        withCredentials: true,
         setHeaders: {
           'X-CSRFToken': csrfToken,
         },
+      })
+    } else {
+      request = request.clone({
+        withCredentials: true,
       })
     }
 
