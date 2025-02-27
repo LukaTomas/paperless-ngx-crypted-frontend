@@ -270,18 +270,6 @@ export class DocumentListViewService {
           activeListViewState.collectionSize = result.count
           activeListViewState.documents = result.results
 
-          this.documentService
-            .getSelectionData(result.all)
-            .pipe(first())
-            .subscribe({
-              next: (selectionData) => {
-                this.selectionData = selectionData
-              },
-              error: () => {
-                this.selectionData = null
-              },
-            })
-
           if (updateQueryParams && !this._activeSavedViewId) {
             let base = ['/documents']
             this.router.navigate(base, {

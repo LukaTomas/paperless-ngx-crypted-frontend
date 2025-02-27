@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http'
+import { HttpClient, HttpParams } from '@angular/common/http'
 import { Injectable } from '@angular/core'
 import { Observable } from 'rxjs'
 import { map } from 'rxjs/operators'
@@ -61,7 +61,7 @@ export class DocumentService extends AbstractPaperlessService<Document> {
     private settingsService: SettingsService,
     private customFieldService: CustomFieldsService
   ) {
-    super(http, 'documents')
+    super(http, 'miniwhoosh')
     if (
       this.permissionsService.currentUserCan(
         PermissionAction.View,
@@ -137,13 +137,22 @@ export class DocumentService extends AbstractPaperlessService<Document> {
     filterRules?: FilterRule[],
     extraParams = {}
   ): Observable<Results<Document>> {
-    return this.list(
-      page,
-      pageSize,
-      sortField,
-      sortReverse,
-      Object.assign(extraParams, queryParamsFromFilterRules(filterRules))
-    )
+    extraParams = Object.assign(extraParams, queryParamsFromFilterRules(filterRules))
+    let httpParams = new HttpParams()
+    if (page) {
+      httpParams = httpParams.set('page', page.toString())
+    }
+    if (pageSize) {
+      httpParams = httpParams.set('page_size', pageSize.toString())
+    }
+    for (let extraParamKey in extraParams) {
+      if (extraParams[extraParamKey] != null) {
+        httpParams = httpParams.set(extraParamKey, extraParams[extraParamKey])
+      }
+    }
+    return this.http.get<Results<Document>>(this.getResourceUrl(null, "search"), {
+      params: httpParams,
+    })
   }
 
   listAllFilteredIds(filterRules?: FilterRule[]): Observable<number[]> {
