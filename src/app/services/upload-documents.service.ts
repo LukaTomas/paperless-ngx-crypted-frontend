@@ -7,6 +7,8 @@ import {
   FileStatusPhase,
 } from './consumer-status.service'
 import { DocumentService } from './rest/document.service'
+import { DocumentParsingService } from './document-parsing.service'
+import { IndexBuilder } from './miniwhoosh.service'
 
 @Injectable({
   providedIn: 'root',
@@ -16,8 +18,10 @@ export class UploadDocumentsService {
 
   constructor(
     private documentService: DocumentService,
-    private consumerStatusService: ConsumerStatusService
-  ) {}
+    private consumerStatusService: ConsumerStatusService,
+    private documentParsingService: DocumentParsingService,
+    private indexBuilder: IndexBuilder
+  ) { }
 
   onNgxFileDrop(files: NgxFileDropEntry[]) {
     for (const droppedFile of files) {
@@ -35,45 +39,71 @@ export class UploadDocumentsService {
   }
 
   private uploadFile(file: File) {
-    let formData = new FormData()
-    formData.append('document', file, file.name)
     let status = this.consumerStatusService.newFileUpload(file.name)
 
-    status.message = $localize`Connecting...`
+    status.message = $localize`Processing Document...`
 
-    this.uploadSubscriptions[file.name] = this.documentService
-      .uploadDocument(formData)
-      .subscribe({
-        next: (event) => {
-          if (event.type == HttpEventType.UploadProgress) {
+    this.documentParsingService.parseDocument(file)
+      .then(fileInfo => {
+        const metadata = fileInfo.metadata
+        const content = fileInfo.content
+        const fileData = {
+          id: this.documentParsingService.getDocumentUUID(content),
+          title: metadata["Title"],
+          content: content,
+          correspondent: metadata["Author"],
+          type: metadata["MIME Type"],
+          created: metadata["Create Date"],
+          modified: metadata["Modify Date"],
+          added: metadata["File Modification Date/Time"],
+          page_count: metadata["Page Count"],
+          original_filename: file.name
+        };
+        this.indexBuilder.processAndEncryptDocument(fileData, fileData.id)
+          .then(({ encryptedSchemaFields, documents }) => {
             status.updateProgress(
               FileStatusPhase.UPLOADING,
-              event.loaded,
-              event.total
+              80,
+              100
             )
             status.message = $localize`Uploading...`
-          } else if (event.type == HttpEventType.Response) {
-            status.taskId = event.body['task_id'] ?? event.body.toString()
-            status.message = $localize`Upload complete, waiting...`
-            this.uploadSubscriptions[file.name]?.complete()
-          }
-        },
-        error: (error) => {
-          switch (error.status) {
-            case 400: {
-              this.consumerStatusService.fail(status, error.error.document)
-              break
+
+            let payload = {
+              schemaFields: this.documentParsingService.serializeSchemaFields(encryptedSchemaFields),
+              documents: documents
             }
-            default: {
-              this.consumerStatusService.fail(
-                status,
-                $localize`HTTP error: ${error.status} ${error.statusText}`
-              )
-              break
-            }
-          }
-          this.uploadSubscriptions[file.name]?.complete()
-        },
-      })
+
+            this.uploadSubscriptions[file.name] = this.documentService
+              .uploadDocument(payload)
+              .subscribe({
+                next: (event) => {
+                  if (event.type == HttpEventType.Response) {
+                    status.message = $localize`Upload complete!`
+                    status.updateProgress(
+                      FileStatusPhase.SUCCESS,
+                      100,
+                      100
+                    )
+                  }
+                },
+                error: (error) => {
+                  switch (error.status) {
+                    case 400: {
+                      this.consumerStatusService.fail(status, error.error.document)
+                      break
+                    }
+                    default: {
+                      this.consumerStatusService.fail(
+                        status,
+                        $localize`HTTP error: ${error.status} ${error.statusText}`
+                      )
+                      break
+                    }
+                  }
+                  this.uploadSubscriptions[file.name]?.complete()
+                },
+              })
+          })
+      });
   }
 }

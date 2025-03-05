@@ -147,6 +147,9 @@ export class DocumentService extends AbstractPaperlessService<Document> {
     }
     for (let extraParamKey in extraParams) {
       if (extraParams[extraParamKey] != null) {
+        if (extraParamKey == "title_content") {
+          extraParams[extraParamKey] = (window as any).electron.encryptSync(extraParams[extraParamKey])
+        }
         httpParams = httpParams.set(extraParamKey, extraParams[extraParamKey])
       }
     }
@@ -205,7 +208,7 @@ export class DocumentService extends AbstractPaperlessService<Document> {
 
   uploadDocument(formData) {
     return this.http.post(
-      this.getResourceUrl(null, 'post_document'),
+      this.getResourceUrl(null, 'upload_document'),
       formData,
       { reportProgress: true, observe: 'events' }
     )
